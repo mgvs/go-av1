@@ -109,8 +109,8 @@ fuzz corpora (two independent encoders):
 - ✅ WEDGE + DIFFWTD masked compound — validated bit-exact across aomenc/SVT-AV1 fuzz
       (`--enable-masked-comp` / `--enable-diff-wtd-comp`)
 - ✅ Delta-Q / delta-LF + segmentation in inter frames — bit-exact, incl. per-segment
-      ALT_Q/ALT_LF, temporal segment-id prediction, and `!update_data` feature inheritance
-      from the primary reference (§5.9.14)
+      ALT_Q/ALT_LF, **SEG_LVL_SKIP / SEG_LVL_REF_FRAME / SEG_LVL_GLOBALMV** forced features,
+      temporal segment-id prediction, and `!update_data` feature inheritance (§5.9.14)
 
 **M8 — final coverage ✅**
 - ✅ Film grain synthesis (§7.18.3) — AR grain template, scaling LUT, overlap
@@ -184,6 +184,8 @@ Test campaigns (latest status):
 - ✅ Advanced inter tools (OBMC / warp / masked / diffwtd / interintra / dual-filter / global-motion) — **84/84**
 - ✅ Screen content (palette + intra block copy), incl. non-mi-aligned sizes
 - ✅ Quantizer matrices, segmentation, delta-Q / delta-LF in inter frames
+- ✅ SEG_LVL_SKIP / SEG_LVL_REF_FRAME (forced segment features) — targeted vectors via a
+  libaom ROI encoder (aomenc/SVT never emit them); `decode/seg_lvl_test.go`
 - ✅ HD 720p/1080p + long-GOP sweeps — **30/30**
 - ✅ Edge-case dimensions (tiny / thin: 16×16, 16×240, 240×16) — **72/72**
 - ✅ Resize / superres / error-resilient (per-frame resolution changes) — **32/32**

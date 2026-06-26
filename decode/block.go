@@ -237,6 +237,11 @@ func (fd *frameDecoder) filterIntraModeInfo() {
 }
 
 func (fd *frameDecoder) readSkip() {
+	// SEG_LVL_SKIP (when read before the segment id) forces skip (AV1 spec §5.11.11).
+	if fd.fh.SegIdPreSkip == 1 && fd.segFeatureActive(header.SegLvlSkip) {
+		fd.skip = 1
+		return
+	}
 	ctx := 0
 	if fd.availU {
 		ctx += fd.skips[fd.miRow-1][fd.miCol]

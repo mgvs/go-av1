@@ -64,7 +64,11 @@ func (fd *frameDecoder) interFrameModeInfo() error {
 }
 
 func (fd *frameDecoder) readSkipMode() {
-	if !fd.fh.SkipModePresent || predict.BlockWidth(fd.miSize) < 8 || predict.BlockHeight(fd.miSize) < 8 {
+	// Segment features that force skip / reference / global motion suppress
+	// skip_mode (AV1 spec §5.11.10).
+	if fd.segFeatureActive(header.SegLvlSkip) || fd.segFeatureActive(header.SegLvlRefFrame) ||
+		fd.segFeatureActive(header.SegLvlGlobalMV) ||
+		!fd.fh.SkipModePresent || predict.BlockWidth(fd.miSize) < 8 || predict.BlockHeight(fd.miSize) < 8 {
 		fd.skipModeFlag = false
 		return
 	}
@@ -83,6 +87,15 @@ func (fd *frameDecoder) readSkipMode() {
 
 func (fd *frameDecoder) readIsInter() error {
 	if fd.skipModeFlag {
+		fd.isInterFlag = true
+		return nil
+	}
+	// Segment features force the inter/intra decision (AV1 spec §5.11.20).
+	if fd.segFeatureActive(header.SegLvlRefFrame) {
+		fd.isInterFlag = fd.fh.FeatureData[fd.segmentId][header.SegLvlRefFrame] != IntraFrame
+		return nil
+	}
+	if fd.segFeatureActive(header.SegLvlGlobalMV) {
 		fd.isInterFlag = true
 		return nil
 	}
@@ -338,6 +351,17 @@ func (fd *frameDecoder) readRefFrames() error {
 		fd.refFrame[1] = fd.fh.SkipModeFrame[1]
 		return nil
 	}
+	// Segment features force the reference frame (AV1 spec §5.11.25).
+	if fd.segFeatureActive(header.SegLvlRefFrame) {
+		fd.refFrame[0] = fd.fh.FeatureData[fd.segmentId][header.SegLvlRefFrame]
+		fd.refFrame[1] = header.NoneFrame
+		return nil
+	}
+	if fd.segFeatureActive(header.SegLvlSkip) || fd.segFeatureActive(header.SegLvlGlobalMV) {
+		fd.refFrame[0] = header.LastFrame
+		fd.refFrame[1] = header.NoneFrame
+		return nil
+	}
 	bw4 := predict.Num4x4BlocksWide[fd.miSize]
 	bh4 := predict.Num4x4BlocksHigh[fd.miSize]
 	if fd.fh.ReferenceSelect && min(bw4, bh4) >= 2 {
@@ -389,6 +413,11 @@ func (fd *frameDecoder) readRefFrames() error {
 func (fd *frameDecoder) readInterMode(isCompound bool) error {
 	if fd.skipModeFlag {
 		fd.yMode = nearestNearestMv
+		return nil
+	}
+	// SEG_LVL_SKIP / SEG_LVL_GLOBALMV force GLOBALMV (AV1 spec §5.11.23).
+	if fd.segFeatureActive(header.SegLvlSkip) || fd.segFeatureActive(header.SegLvlGlobalMV) {
+		fd.yMode = globalMv
 		return nil
 	}
 	if isCompound {
