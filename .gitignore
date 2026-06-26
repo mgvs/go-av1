@@ -1,0 +1,20 @@
+# --- Go ---
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/go-msmpeg4
+/bin/
+vendor/
+
+# --- OS / editor ---
+.DS_Store
+*.swp
+*~
+.idea/
+
+# local test media
+/testdata

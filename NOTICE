@@ -1,0 +1,15 @@
+go-av1 — pure-Go AV1 video decoder.
+
+This is an original Go implementation of the AV1 decoding process, written from
+the public AV1 Bitstream & Decoding Process Specification (Alliance for Open
+Media) and informed for cross-checking by the BSD-2-Clause reference decoders
+dav1d (https://code.videolan.org/videolan/dav1d, © VideoLAN and dav1d authors)
+and libaom (https://aomedia.googlesource.com/aom, © The Alliance for Open Media).
+
+AV1 is an open, royalty-free codec (royalty-free patent grant by AOMedia,
+designed patent-free). No proprietary source or disassembly was used.
+
+Reference material:
+  - AV1 Bitstream & Decoding Process Specification (public, AOMedia).
+  - dav1d, libaom (BSD-2-Clause) — used only as behavioural references for
+    bit-exact cross-checking of intermediate values, not copied.
