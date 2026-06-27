@@ -116,17 +116,24 @@ func contains(s []int, v int) bool {
 	return false
 }
 
-// readTransformType reads intra_tx_type for a luma transform block and returns the
-// transform type (AV1 spec §5.11.47). segmentation is disabled in our streams so the
-// quantizer test uses base_q_idx directly.
 // filterIntraModeToIntraDir maps a filter-intra mode to the intra direction used
 // for intra_tx_type CDF selection (AV1 spec §9.3): {DC, V, H, D157, DC}.
 var filterIntraModeToIntraDir = [5]int{DCPred, VPred, HPred, D157Pred, DCPred}
 
+// readTransformType reads intra_tx_type/inter_tx_type for a luma transform block
+// (AV1 spec §5.11.47). The tx_type is coded only when the (per-segment) qindex > 0.
 func (fd *frameDecoder) readTransformType(txSz, x4, y4 int) int {
 	set := fd.getTxSet(txSz)
 	txType := DctDct
-	if set > 0 && fd.fh.BaseQIdx > 0 {
+	// The tx_type is coded only when the quantizer is non-zero. With segmentation
+	// the per-segment qindex (SEG_LVL_ALT_Q, ignoring delta-q) is used — NOT the
+	// frame base_q_idx, which can be 0 while a segment raises the block above it
+	// (AV1 spec §5.11.47).
+	qidx := fd.fh.BaseQIdx
+	if fd.fh.SegmentationEnabled {
+		qidx = fd.getQIndexSeg(true, fd.segmentId)
+	}
+	if set > 0 && qidx > 0 {
 		txSzSqr := TxSizeSqr[txSz]
 		if fd.isInterFlag {
 			switch set {
@@ -164,7 +171,7 @@ func (fd *frameDecoder) readTransformType(txSz, x4, y4 int) int {
 // computeTxType derives the transform type for a transform block (AV1 spec
 // compute_tx_type), reading the stored per-4x4 luma transform type for chroma.
 func (fd *frameDecoder) computeTxType(plane, txSz, x4, y4 int) int {
-	if fd.fh.CodedLossless || TxSizeSqrUp[txSz] > TX32x32 {
+	if fd.lossless() || TxSizeSqrUp[txSz] > TX32x32 {
 		return DctDct
 	}
 	set := fd.getTxSet(txSz)

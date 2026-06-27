@@ -155,7 +155,7 @@ func (fd *frameDecoder) decodeCoeffs(plane, txSz, x4, y4 int) ([][]int64, int, i
 	// Quantizer matrix scaling (AV1 spec §7.12.3): when using_qmatrix, the per-
 	// coefficient quantizer is q2 = Round2(q * Quantizer_Matrix[...], 5).
 	qmLevel := 15
-	if fd.fh.UsingQMatrix && !fd.fh.CodedLossless {
+	if fd.fh.UsingQMatrix && !fd.lossless() {
 		switch plane {
 		case 0:
 			qmLevel = fd.fh.QmY

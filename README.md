@@ -178,7 +178,8 @@ is skipped, not flagged).
 
 Test campaigns (latest status):
 
-- ✅ Official conformance vectors — **126/126** bit-exact vs dav1d
+- ✅ Official conformance vectors — **242/242** (complete `av1-1-*` set: 8/10-bit at every
+  quantizer, sizes, cdfupdate, mv/mfmv, intra_only, svc, film_grain, monochrome) bit-exact vs dav1d
 - ✅ aomenc randomized fuzz — content/size/depth/tool sweeps, **all pass**
 - ✅ SVT-AV1 fuzz (second encoder, different bitstream paths) — **80/80**
 - ✅ Advanced inter tools (OBMC / warp / masked / diffwtd / interintra / dual-filter / global-motion) — **84/84**
@@ -186,6 +187,9 @@ Test campaigns (latest status):
 - ✅ Quantizer matrices, segmentation, delta-Q / delta-LF in inter frames
 - ✅ SEG_LVL_SKIP / SEG_LVL_REF_FRAME (forced segment features) — targeted vectors via a
   libaom ROI encoder (aomenc/SVT never emit them); `decode/seg_lvl_test.go`
+- ✅ Per-segment qindex / lossless with `base_q_idx=0` (mixed lossless + lossy segments):
+  intra_tx_type gating and tx-size / tx-type / inverse-transform use the per-segment value,
+  not the frame-level one (`decode/bug8_lossless_seg_test.go`) — **1691/1691** ROI fuzz
 - ✅ HD 720p/1080p + long-GOP sweeps — **30/30**
 - ✅ Edge-case dimensions (tiny / thin: 16×16, 16×240, 240×16) — **72/72**
 - ✅ Resize / superres / error-resilient (per-frame resolution changes) — **32/32**

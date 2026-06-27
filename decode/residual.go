@@ -38,7 +38,7 @@ func (fd *frameDecoder) residual() error {
 				}
 				baseX := (miColChunk >> subX) * 4
 				baseY := (miRowChunk >> subY) * 4
-				if fd.isInterFlag && !fd.fh.CodedLossless && plane == 0 {
+				if fd.isInterFlag && !fd.lossless() && plane == 0 {
 					if err := fd.transformTree(baseX, baseY, num4x4W*4, num4x4H*4); err != nil {
 						return err
 					}
@@ -166,7 +166,7 @@ func (fd *frameDecoder) transformBlock(plane, baseX, baseY, txSz, x, y int) erro
 		culLevel, dcCategory = cl, dc
 		var res []int32
 		var w, h int
-		if fd.fh.CodedLossless {
+		if fd.lossless() {
 			res, w, h, err = transform.InverseWHT2D(dequant, fd.bitDepth)
 		} else {
 			res, w, h, err = transform.Inverse2D(txSz, txType, dequant, fd.bitDepth)
@@ -249,7 +249,7 @@ func (fd *frameDecoder) transformBlockResidual(plane, startX, startY, txSz int) 
 		culLevel, dcCategory = cl, dc
 		var res []int32
 		var w, h int
-		if fd.fh.CodedLossless {
+		if fd.lossless() {
 			res, w, h, err = transform.InverseWHT2D(dequant, fd.bitDepth)
 		} else {
 			res, w, h, err = transform.Inverse2D(txSz, txType, dequant, fd.bitDepth)
@@ -454,7 +454,7 @@ func round2signed(x, n int) int {
 }
 
 func (fd *frameDecoder) getTxSize(plane, txSz int) int {
-	if fd.fh.CodedLossless {
+	if fd.lossless() {
 		return TX4x4
 	}
 	if plane == 0 {

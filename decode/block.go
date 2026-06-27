@@ -253,11 +253,22 @@ func (fd *frameDecoder) readSkip() {
 	fd.tr("skip(ctx%d)=%d", ctx, fd.skip)
 }
 
+// lossless reports whether the current block's segment is coded losslessly
+// (AV1 spec Lossless = LosslessArray[segment_id]). This is PER-SEGMENT — distinct
+// from the frame-level CodedLossless (the AND over all segments). With base_q_idx=0
+// and segmentation a block may be lossless while the frame is not (and vice versa),
+// which changes its transform size (forced TX_4X4), transform type (DCT_DCT) and the
+// inverse transform (Walsh–Hadamard). Frame-level decisions (CDEF, loop filter, loop
+// restoration) keep using CodedLossless.
+func (fd *frameDecoder) lossless() bool {
+	return fd.fh.LosslessArray[fd.segmentId]
+}
+
 // readBlockTxSize reads the transform size for an intra block (AV1 spec §5.11.15).
 func (fd *frameDecoder) readBlockTxSize() error {
 	// Inter blocks with a coded residual use the var-tx transform tree.
 	if fd.fh.TxMode == header.TxModeSelect && fd.miSize > predict.Block4x4 &&
-		fd.isInterFlag && fd.skip == 0 && !fd.fh.CodedLossless {
+		fd.isInterFlag && fd.skip == 0 && !fd.lossless() {
 		maxTxSz := MaxTxSizeRect[fd.miSize]
 		txW4 := TxWidth[maxTxSz] >> 2
 		txH4 := TxHeight[maxTxSz] >> 2
@@ -271,7 +282,7 @@ func (fd *frameDecoder) readBlockTxSize() error {
 		return nil
 	}
 	allowSelect := fd.skip == 0 || !fd.isInterFlag
-	if fd.fh.CodedLossless {
+	if fd.lossless() {
 		fd.txSize = TX4x4
 	} else {
 		maxRectTxSize := MaxTxSizeRect[fd.miSize]
@@ -367,7 +378,7 @@ func (fd *frameDecoder) intrabcModeInfo() error {
 // CfL is allowed only when the chroma residual size is BLOCK_4X4; otherwise it is
 // allowed for blocks up to 32x32.
 func (fd *frameDecoder) cflAllowed() bool {
-	if fd.fh.CodedLossless {
+	if fd.lossless() {
 		return fd.getPlaneResidualSize(fd.miSize, 1) == predict.Block4x4
 	}
 	return predict.BlockWidth(fd.miSize) <= 32 && predict.BlockHeight(fd.miSize) <= 32
