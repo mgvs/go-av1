@@ -55,6 +55,9 @@ func SplitTileGroup(fh *header.FrameHeader, data []byte) ([]Tile, error) {
 	r.ByteAlign()
 	pos := r.Pos() / 8 // byte offset of the first tile size / tile data
 
+	if tgStart > tgEnd || tgStart < 0 || tgEnd >= numTiles {
+		return nil, ErrTruncated
+	}
 	tiles := make([]Tile, 0, tgEnd-tgStart+1)
 	for tileNum := tgStart; tileNum <= tgEnd; tileNum++ {
 		tileRow := tileNum / fh.TileCols

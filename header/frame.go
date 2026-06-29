@@ -197,9 +197,9 @@ func ParseFrameHeader(seq *SequenceHeader, st *State, payload []byte, temporalID
 		f.ShowExistingFrame = r.F(1) == 1
 		if f.ShowExistingFrame {
 			f.FrameToShowMapIdx = int(r.F(3))
-			if seq.DecoderModelInfoPresent { // && !equal_picture_interval — we don't track equal_picture_interval; decoder model unused in our streams
-				n := seq.FramePresentationTimeLengthMinus1 + 1
-				r.F(n)
+			if seq.DecoderModelInfoPresent && !seq.EqualPictureInterval {
+				// temporal_point_info() (AV1 spec §5.9.31).
+				r.F(seq.FramePresentationTimeLengthMinus1 + 1)
 			}
 			if seq.FrameIDNumbersPresent {
 				r.F(idLen)
@@ -210,6 +210,10 @@ func ParseFrameHeader(seq *SequenceHeader, st *State, payload []byte, temporalID
 		f.FrameType = int(r.F(2))
 		f.FrameIsIntra = f.FrameType == IntraOnlyFrame || f.FrameType == KeyFrame
 		f.ShowFrame = r.F(1) == 1
+		if f.ShowFrame && seq.DecoderModelInfoPresent && !seq.EqualPictureInterval {
+			// temporal_point_info(): frame_presentation_time (AV1 spec §5.9.31).
+			r.F(seq.FramePresentationTimeLengthMinus1 + 1)
+		}
 		if f.ShowFrame {
 			f.ShowableFrame = f.FrameType != KeyFrame
 		} else {
@@ -263,8 +267,21 @@ func ParseFrameHeader(seq *SequenceHeader, st *State, payload []byte, temporalID
 	} else {
 		f.PrimaryRefFrame = int(r.F(3))
 	}
-	// decoder_model_info_present_flag handling for buffer_removal_time omitted:
-	// not present in the streams we target (no decoder model).
+	if seq.DecoderModelInfoPresent {
+		if r.F(1) == 1 { // buffer_removal_time_present_flag
+			for opNum := 0; opNum <= seq.OperatingPointsCntMinus1; opNum++ {
+				if !seq.DecoderModelPresentForOp[opNum] {
+					continue
+				}
+				opPtIdc := seq.OperatingPointIdc[opNum]
+				inTemporal := (opPtIdc >> uint(temporalID)) & 1
+				inSpatial := (opPtIdc >> uint(spatialID+8)) & 1
+				if opPtIdc == 0 || (inTemporal != 0 && inSpatial != 0) {
+					r.F(seq.BufferRemovalTimeLengthMinus1 + 1) // buffer_removal_time[opNum]
+				}
+			}
+		}
+	}
 
 	if f.FrameType == SwitchFrame || (f.FrameType == KeyFrame && f.ShowFrame) {
 		f.RefreshFrameFlags = allFrames
@@ -472,7 +489,7 @@ func (f *FrameHeader) tileInfo(r *bits.Reader, seq *SequenceHeader) {
 		} else {
 			maxTileAreaSb = sbRows * sbCols
 		}
-		maxTileHeightSb := max(maxTileAreaSb/widestTileSb, 1)
+		maxTileHeightSb := max(maxTileAreaSb/max(widestTileSb, 1), 1)
 		startSb = 0
 		i = 0
 		for ; startSb < sbRows; i++ {

@@ -44,6 +44,11 @@ func NewDecoder(seq *header.SequenceHeader) *Decoder {
 	return &Decoder{seq: seq, st: &header.State{}}
 }
 
+// SetSeq updates the active sequence header without resetting the reference
+// frame store — a sequence header OBU may repeat within a coded video sequence
+// (e.g. at random-access points) and must not clear the DPB (AV1 spec §7.5).
+func (dec *Decoder) SetSeq(seq *header.SequenceHeader) { dec.seq = seq }
+
 // State returns the cross-frame header state (for ParseFrameHeader).
 func (dec *Decoder) State() *header.State { return dec.st }
 

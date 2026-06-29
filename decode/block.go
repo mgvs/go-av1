@@ -261,6 +261,9 @@ func (fd *frameDecoder) readSkip() {
 // inverse transform (Walsh–Hadamard). Frame-level decisions (CDEF, loop filter, loop
 // restoration) keep using CodedLossless.
 func (fd *frameDecoder) lossless() bool {
+	if fd.segmentId < 0 || fd.segmentId >= header.MaxSegments {
+		return fd.fh.CodedLossless
+	}
 	return fd.fh.LosslessArray[fd.segmentId]
 }
 

@@ -1,10 +1,6 @@
 package header
 
-import (
-	"fmt"
-
-	"github.com/mgvs/go-av1/bits"
-)
+import "github.com/mgvs/go-av1/bits"
 
 // getRelativeDist returns the signed circular distance between two order hints
 // (AV1 spec §5.9.3). Returns 0 when order hints are disabled.
@@ -17,6 +13,88 @@ func getRelativeDist(seq *SequenceHeader, a, b int) int {
 	return (diff & (m - 1)) - (diff & m)
 }
 
+// setFrameRefs derives the 7 reference indices from last_frame_idx and
+// gold_frame_idx when frame_refs_short_signaling is set (AV1 spec §7.8).
+func (f *FrameHeader) setFrameRefs(seq *SequenceHeader, st *State, lastFrameIdx, goldFrameIdx int) {
+	for i := 0; i < RefsPerFrame; i++ {
+		f.RefFrameIdx[i] = -1
+	}
+	f.RefFrameIdx[LastFrame-LastFrame] = lastFrameIdx
+	f.RefFrameIdx[GoldenFrame-LastFrame] = goldFrameIdx
+
+	var usedFrame [NumRefFrames]bool
+	usedFrame[lastFrameIdx] = true
+	usedFrame[goldFrameIdx] = true
+
+	curFrameHint := 1 << uint(seq.OrderHintBits-1)
+	var shifted [NumRefFrames]int
+	for i := 0; i < NumRefFrames; i++ {
+		shifted[i] = curFrameHint + getRelativeDist(seq, st.RefOrderHint[i], f.OrderHint)
+	}
+
+	find := func(backward, earliest bool) int {
+		ref := -1
+		best := 0
+		for i := 0; i < NumRefFrames; i++ {
+			hint := shifted[i]
+			if usedFrame[i] {
+				continue
+			}
+			if backward && hint < curFrameHint {
+				continue
+			}
+			if !backward && hint >= curFrameHint {
+				continue
+			}
+			if ref < 0 || (earliest && hint < best) || (!earliest && hint >= best) {
+				ref = i
+				best = hint
+			}
+		}
+		return ref
+	}
+
+	// ALTREF, then BWDREF, then ALTREF2 from the backward references.
+	if ref := find(true, false); ref >= 0 { // latest backward
+		f.RefFrameIdx[AltRefFrame-LastFrame] = ref
+		usedFrame[ref] = true
+	}
+	if ref := find(true, true); ref >= 0 { // earliest backward
+		f.RefFrameIdx[BwdRefFrame-LastFrame] = ref
+		usedFrame[ref] = true
+	}
+	if ref := find(true, true); ref >= 0 { // earliest backward
+		f.RefFrameIdx[AltRef2Frame-LastFrame] = ref
+		usedFrame[ref] = true
+	}
+
+	// Remaining forward references in a fixed priority order.
+	refFrameList := [RefsPerFrame - 2]int{Last2Frame, Last3Frame, BwdRefFrame, AltRef2Frame, AltRefFrame}
+	for _, refFrame := range refFrameList {
+		if f.RefFrameIdx[refFrame-LastFrame] < 0 {
+			if ref := find(false, false); ref >= 0 { // latest forward
+				f.RefFrameIdx[refFrame-LastFrame] = ref
+				usedFrame[ref] = true
+			}
+		}
+	}
+
+	// Fill any still-unset reference with the earliest available frame.
+	ref := -1
+	earliest := 0
+	for i := 0; i < NumRefFrames; i++ {
+		if ref < 0 || shifted[i] < earliest {
+			ref = i
+			earliest = shifted[i]
+		}
+	}
+	for i := 0; i < RefsPerFrame; i++ {
+		if f.RefFrameIdx[i] < 0 {
+			f.RefFrameIdx[i] = ref
+		}
+	}
+}
+
 // interRefs reads the reference-frame portion of a non-intra frame header
 // (AV1 spec §5.9.2).
 func (f *FrameHeader) interRefs(r *bits.Reader, seq *SequenceHeader, st *State, idLen int) error {
@@ -24,7 +102,9 @@ func (f *FrameHeader) interRefs(r *bits.Reader, seq *SequenceHeader, st *State, 
 	if seq.EnableOrderHint {
 		frameRefsShortSignaling = r.F(1) == 1
 		if frameRefsShortSignaling {
-			return fmt.Errorf("header: frame_refs_short_signaling not yet implemented")
+			lastFrameIdx := int(r.F(3))
+			goldFrameIdx := int(r.F(3))
+			f.setFrameRefs(seq, st, lastFrameIdx, goldFrameIdx)
 		}
 	}
 	for i := 0; i < RefsPerFrame; i++ {

@@ -8,6 +8,9 @@ import (
 // segFeatureActiveIdx reports whether a segmentation feature is active for a
 // given segment (AV1 spec §5.11.50).
 func (fd *frameDecoder) segFeatureActiveIdx(segID, feature int) bool {
+	if segID < 0 || segID >= header.MaxSegments {
+		return false
+	}
 	return fd.fh.SegmentationEnabled && fd.fh.FeatureEnabled[segID][feature]
 }
 
@@ -86,6 +89,14 @@ func (fd *frameDecoder) readSegmentId() {
 	}
 	raw := fd.d.DecodeSymbol(fd.c.segmentId[ctx])
 	fd.segmentId = negDeinterleave(raw, pred, fd.fh.LastActiveSegID+1)
+	// A conformant stream never codes a segment id outside [0, MaxSegments); a
+	// negative/oversized value only arises from an upstream desync. Clamp so the
+	// downstream per-segment lookups degrade gracefully instead of panicking.
+	if fd.segmentId < 0 {
+		fd.segmentId = 0
+	} else if fd.segmentId >= header.MaxSegments {
+		fd.segmentId = header.MaxSegments - 1
+	}
 }
 
 // intraSegmentId reads the segment id for an intra-frame block (AV1 spec §5.11.9).
@@ -168,7 +179,17 @@ func (fd *frameDecoder) interSegmentId(preSkip bool) {
 		return
 	}
 	if fd.fh.SegmentationTemporalUpdate {
-		ctx := fd.leftSegPredContext[fd.miRow] + fd.aboveSegPredContext[fd.miCol]
+		// Neighbour seg-pred flags only contribute when the neighbour is available
+		// (same tile / not a frame edge); libaom reads above_mi/left_mi which are
+		// NULL across those boundaries (AV1 spec get_pred_context_seg_id).
+		aboveSip, leftSip := 0, 0
+		if fd.availU {
+			aboveSip = fd.aboveSegPredContext[fd.miCol]
+		}
+		if fd.availL {
+			leftSip = fd.leftSegPredContext[fd.miRow]
+		}
+		ctx := aboveSip + leftSip
 		pred := fd.d.DecodeSymbol(fd.c.segIdPredicted[ctx])
 		if pred != 0 {
 			fd.segmentId = predictedSegmentId

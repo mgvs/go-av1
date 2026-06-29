@@ -61,6 +61,9 @@ func (f *FrameHeader) filmGrainParams(r *bits.Reader, seq *SequenceHeader, st *S
 		return
 	}
 	fg.NumYPoints = int(r.F(4))
+	if fg.NumYPoints > len(fg.PointYValue) {
+		fg.NumYPoints = len(fg.PointYValue)
+	}
 	for i := 0; i < fg.NumYPoints; i++ {
 		fg.PointYValue[i] = int(r.F(8))
 		fg.PointYScaling[i] = int(r.F(8))
@@ -74,11 +77,17 @@ func (f *FrameHeader) filmGrainParams(r *bits.Reader, seq *SequenceHeader, st *S
 		fg.NumCrPoints = 0
 	} else {
 		fg.NumCbPoints = int(r.F(4))
+		if fg.NumCbPoints > len(fg.PointCbValue) {
+			fg.NumCbPoints = len(fg.PointCbValue)
+		}
 		for i := 0; i < fg.NumCbPoints; i++ {
 			fg.PointCbValue[i] = int(r.F(8))
 			fg.PointCbScaling[i] = int(r.F(8))
 		}
 		fg.NumCrPoints = int(r.F(4))
+		if fg.NumCrPoints > len(fg.PointCrValue) {
+			fg.NumCrPoints = len(fg.PointCrValue)
+		}
 		for i := 0; i < fg.NumCrPoints; i++ {
 			fg.PointCrValue[i] = int(r.F(8))
 			fg.PointCrScaling[i] = int(r.F(8))

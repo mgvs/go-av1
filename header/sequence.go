@@ -45,6 +45,8 @@ type SequenceHeader struct {
 	// decoder_model_info (only parsed when present).
 	BufferDelayLengthMinus1           int
 	NumUnitsInDecodingTick            uint32
+	EqualPictureInterval              bool
+	DecoderModelPresentForOp          [32]bool
 	BufferRemovalTimeLengthMinus1     int
 	FramePresentationTimeLengthMinus1 int
 
@@ -99,7 +101,8 @@ func ParseSequenceHeader(payload []byte) (*SequenceHeader, error) {
 				s.SeqTier[i] = 0
 			}
 			if s.DecoderModelInfoPresent {
-				if r.F(1) == 1 { // decoder_model_present_for_this_op
+				s.DecoderModelPresentForOp[i] = r.F(1) == 1
+				if s.DecoderModelPresentForOp[i] {
 					n := s.BufferDelayLengthMinus1 + 1
 					r.F(n) // decoder_buffer_delay
 					r.F(n) // encoder_buffer_delay
@@ -178,7 +181,8 @@ func ParseSequenceHeader(payload []byte) (*SequenceHeader, error) {
 func (s *SequenceHeader) parseTimingInfo(r *bits.Reader) {
 	r.F(32)          // num_units_in_display_tick
 	r.F(32)          // time_scale
-	if r.F(1) == 1 { // equal_picture_interval
+	s.EqualPictureInterval = r.F(1) == 1
+	if s.EqualPictureInterval {
 		r.Uvlc() // num_ticks_per_picture_minus_1
 	}
 }

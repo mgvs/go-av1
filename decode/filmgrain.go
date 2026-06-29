@@ -50,8 +50,10 @@ type grainState struct {
 	randomRegister     int
 
 	lumaGrain [73][82]int
-	cbGrain   [38][44]int
-	crGrain   [38][44]int
+	// Chroma grain is at most 73x82 (4:4:4); 4:2:0 uses a 38x44 sub-block and
+	// 4:2:2 a 73x44 sub-block (AV1 spec §7.18.3.3).
+	cbGrain [73][82]int
+	crGrain [73][82]int
 	scaling   [3][256]int
 }
 

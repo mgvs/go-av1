@@ -28,6 +28,10 @@ func (fd *frameDecoder) computePrediction() error {
 			subX, subY = fd.subX, fd.subY
 		}
 		planeSz := SubsampledSize[fd.miSize][subX][subY]
+		if planeSz < 0 {
+			// Invalid subsampled size (only reachable on a desynced stream).
+			continue
+		}
 		num4x4W := predict.Num4x4BlocksWide[planeSz]
 		num4x4H := predict.Num4x4BlocksHigh[planeSz]
 		baseX := (fd.miCol >> uint(subX)) * 4
@@ -199,8 +203,17 @@ func (fd *frameDecoder) predictInterRefList(plane, x, y, w, h, candRow, candCol,
 	}
 	// Clamp reference reads to the visible (upscaled) reference dimensions, not
 	// the padded plane size (AV1 spec §7.11.3.2: lastX/lastY from RefUpscaledWidth).
-	lastX := ((refWidthLuma + subX) >> uint(subX)) - 1
-	lastY := ((refHeightLuma + subY) >> uint(subY)) - 1
+	// Intra block copy reads the *current* frame, which is reconstructed on the
+	// mi grid (MiCols*4 ≥ FrameWidth); clamping to FrameWidth-1 would miss the
+	// last mi-aligned column/row that a dv may legally reference. The scale still
+	// uses FrameWidth (1:1) — only the read clamp uses the mi-aligned extent.
+	clampW, clampH := refWidthLuma, refHeightLuma
+	if refFrame == IntraFrame {
+		clampW = fd.miCols * 4
+		clampH = fd.miRows * 4
+	}
+	lastX := ((clampW + subX) >> uint(subX)) - 1
+	lastY := ((clampH + subY) >> uint(subY)) - 1
 
 	const refScaleShift, subpelBits, scaleSubpelBits = 14, 4, 10
 	halfSample := 1 << (subpelBits - 1)
